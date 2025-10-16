@@ -13,8 +13,12 @@ export async function sendOtpEmail(toEmail, otp) {
         user: process.env.MAIL_USERNAME,
         pass: process.env.MAIL_PASSWORD,
       },
+      tls: {
+        rejectUnauthorized: false,
+      },
     });
 
+    await transporter.verify();
     await transporter.sendMail({
       from: `"Solar Drying System" <${process.env.EMAIL_USER}>`,
       to: toEmail.toLowerCase(),
