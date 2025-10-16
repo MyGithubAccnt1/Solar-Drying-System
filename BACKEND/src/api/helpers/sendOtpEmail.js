@@ -19,13 +19,15 @@ export async function sendOtpEmail(toEmail, otp) {
     });
 
     await transporter.verify();
-    await transporter.sendMail({
-      from: `"Solar Drying System" <${process.env.EMAIL_USER}>`,
-      to: toEmail.toLowerCase(),
-      subject:
-        "Verify your newly created account at Solar Drying System using this OTP",
-      text: `Your OTP code is ${otp}. This will expire in 5 minutes.`,
-      html: `
+    setTimeout(() => {
+      transporter.sendMail(
+        {
+          from: `"Solar Drying System" <${process.env.EMAIL_USER}>`,
+          to: toEmail.toLowerCase(),
+          subject:
+            "Verify your newly created account at Solar Drying System using this OTP",
+          text: `Your OTP code is ${otp}. This will expire in 5 minutes.`,
+          html: `
         <html>
             <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; padding: 20px; background-color: #f4f4f4;">
                 <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
@@ -41,9 +43,13 @@ export async function sendOtpEmail(toEmail, otp) {
             </body>
         </html>
       `,
-    });
-
-    console.log(`✅ OTP email sent to ${toEmail.toLowerCase()}`);
+        },
+        (err, info) => {
+          if (err) console.error("Mail error:", err);
+          else console.log("Mail sent:", info.response);
+        }
+      );
+    }, 0);
   } catch (err) {
     console.error("❌ Error sending OTP email:", err.message);
   }
