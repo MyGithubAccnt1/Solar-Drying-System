@@ -111,6 +111,7 @@ function DryerInformation() {
 
         dryerData.image_url = uploadRes.data.url;
       }
+      dryerData.isverified = dryerData.isverified === "true";  
 
       const res = await api.post("/dryers", {
         dryer_name: dryerData.dryer_name,
@@ -179,6 +180,7 @@ function DryerInformation() {
       } else {
         updatedData.image_url = selectedDryer.image_url;
       }
+      updatedData.isverified = updatedData.isverified === "true"; 
 
       const res = await api.put(`/dryers/${selectedDryer.id}`, updatedData);
 
@@ -207,7 +209,8 @@ function DryerInformation() {
                   day: "numeric",
                 })
               : "N/A",
-            action: (
+              isverified: res.isverified ? "Verified" : "Not Verified",   
+              action: (
               <div className="flex justify-center gap-2">
                 <Button
                   onClick={() => handleEdit(res)}

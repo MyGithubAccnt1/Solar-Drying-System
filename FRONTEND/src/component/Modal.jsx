@@ -1,12 +1,26 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Button from "./Button";
-import { RiCloseLargeLine } from "react-icons/ri";
+import { RiCloseLargeLine, RiQrCodeLine } from "react-icons/ri";
+import { FaLocationArrow } from "react-icons/fa";
+import { ImFolderUpload } from "react-icons/im";
+import api from "../api/api.js";
 
-function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
+function Modal({
+  setModal,
+  handleSubmit,
+  title,
+  button_name,
+  fields,
+  datas,
+  setGcashModal,
+}) {
   const [address, setAddress] = useState("");
   const [previewUrls, setPreviewUrls] = useState({});
   const [mainImage, setMainImage] = useState("");
   const userRole = localStorage.getItem("role");
+  const [qrModal, setQrmodal] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+
   const handleLocation = () => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -40,6 +54,59 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
     return isNaN(cleaned) ? 0 : Number(cleaned);
   };
 
+  const fetchData = useCallback(async () => {
+    const local = localStorage.getItem("modal_reservation_data");
+    const data = JSON.parse(local);
+    setTransactions(
+      Array.isArray(data)
+        ? data?.map((res) => ({
+            reference_no: res.reference_no,
+            amount: res.amount,
+            sender: res.sender_number,
+            date: res.transaction_date,
+          }))
+        : []
+    );
+
+    try {
+      const result = await api.get(
+        `${import.meta.env.VITE_API}/transactions/${datas.id}`
+      );
+
+      if (!Array.isArray(result.data)) throw new Error("Invalid data from API");
+      const isDifferent =
+        JSON.stringify(data) !==
+        JSON.stringify(Array.isArray(result.data) ? result.data : []);
+      if (isDifferent) {
+        setTransactions(
+          result.data?.map((res) => ({
+            reference_no: res.reference_no,
+            amount: res.amount,
+            sender: res.sender_number,
+            date: res.transaction_date,
+          }))
+        );
+        localStorage.setItem(
+          "modal_reservation_data",
+          JSON.stringify(result.data)
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      setTransactions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+
+    const interval = setInterval(() => {
+      fetchData();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
   return (
     <div
       onClick={() => setModal(false)}
@@ -69,41 +136,30 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
                 field.colspan === 2 ? "md:col-span-2" : ""
               }`}
             >
-
-            {field.name === "payment" ? (
-              <>
-               <label className="text-[rgba(0,100,0,255)] font-bold text-md">
-                {field.name === "payment" && userRole === "farmer"
-                  ? "Paraan ng Pagbabayad"
-                  : field.label}
-              </label>
-                <select
-                  name={field.name}
-                  className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-green-500"
-                  defaultValue={field.defaultValue || ""}
-                  required={field.required}
-                >
-                  {userRole === "farmer" ? (
-                    <>
-                      <option value="cash">
-                        Cash
-                      </option>
-                      <option value="gcash">
-                        GCash
-                      </option> 
-                    </>
-                  ) : (
-                    <>
-                      <option value="cash">Cash</option>
-                      <option value="gcash">GCash</option>
-                    </>
-                  )}
-                </select>
-              </>
-            ) : field.name === "quantity" ? (
-               <> 
+              {field.name === "payment" ? (
+                <>
                   <label className="text-[rgba(0,100,0,255)] font-bold text-md">
-                    {userRole === "farmer" ? "Dami (Canvans)" : "Quantity (Canvans)"}
+                    {field.name === "payment" && userRole === "farmer"
+                      ? "Paraan ng Pagbabayad"
+                      : field.label}
+                  </label>
+                  <select
+                    name={field.name}
+                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-green-500"
+                    defaultValue={field.defaultValue || ""}
+                    required={field.required}
+                    disabled={field.disabled}
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="gcash">GCash</option>
+                  </select>
+                </>
+              ) : field.name === "quantity" ? (
+                <>
+                  <label className="text-[rgba(0,100,0,255)] font-bold text-md">
+                    {userRole === "farmer"
+                      ? "Dami (Canvans)"
+                      : "Quantity (Canvans)"}
                   </label>
                   <input
                     type="number"
@@ -111,12 +167,13 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
                     className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-green-500"
                     defaultValue={field.defaultValue || ""}
                     required={field.required}
+                    disabled={field.disabled}
                     min={0}
                     step={1}
                   />
-                  </>
-                ) : field.name === "crop_type" ? (
-              <>
+                </>
+              ) : field.name === "crop_type" ? (
+                <>
                   <label className="text-[rgba(0,100,0,255)] font-bold text-md">
                     {userRole === "farmer" ? "Uri ng pananim" : field.label}
                   </label>
@@ -124,6 +181,7 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
                     name={field.name}
                     className="w-full border border-gray-300 rounded-lg p-2 bg-white text-sm focus:ring-2 focus:ring-green-500"
                     defaultValue={field.defaultValue || ""}
+                    disabled={field.disabled}
                     required={field.required}
                   >
                     {(() => {
@@ -131,9 +189,11 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
                         return (
                           <>
                             <option value="" disabled>
-                              {userRole === "farmer" ? "Pumili ng uri ng pananim" : field.label}
+                              {userRole === "farmer"
+                                ? "Pumili ng uri ng pananim"
+                                : field.label}
                             </option>
-                            <option value="mais">Mais</option> 
+                            <option value="mais">Mais</option>
                             <option value="rice">Palay</option>
                           </>
                         );
@@ -152,7 +212,7 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
                   </select>
                 </>
               ) : field.name === "image_url" ? (
-              <>
+                <>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                     {field.label}
                   </label>
@@ -207,8 +267,7 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
                     name={field.name}
                     className="w-full border border-gray-300 rounded-lg p-2 bg-white text-sm focus:ring-2 focus:ring-green-500"
                     defaultValue={field.defaultValue || ""}
-                    onChange={(e) => field.onChange && field.onChange(e)}  
-
+                    onChange={(e) => field.onChange && field.onChange(e)}
                   >
                     {field.options.map((option, idx) => (
                       <option
@@ -244,8 +303,12 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
                   </div>
                 </>
               ) : field.name === "id" ? (
-                <input name={field.name} type={field.type} value={field.value} />
-              ) : field.type === "textarea" ? (  
+                <input
+                  name={field.name}
+                  type={field.type}
+                  value={field.value}
+                />
+              ) : field.type === "textarea" ? (
                 <>
                   <label className="text-[rgba(0,100,0,255)] font-bold text-md">
                     {field.label}
@@ -256,7 +319,7 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
                     required={field.required}
                     disabled={field.disabled}
                     defaultValue={field.defaultValue || ""}
-                    autoFocus={field.name === "notes"}  
+                    autoFocus={field.name === "notes"}
                     className="w-full h-32 border border-gray-300 rounded-lg p-2 text-sm resize-none focus:ring-2 focus:ring-green-500"
                   />
                 </>
@@ -282,94 +345,209 @@ function Modal({ setModal, handleSubmit, title, button_name, fields, datas }) {
 
           {datas ? (
             <div className="col-span-1 md:col-span-2">
-              <div className="flex flex-col items-center text-sm">
-                <b className="uppercase text-md">{datas.dryer_id.dryer_name}</b>
-                <p className="capitalize">
-                  {String(datas.dryer_id.location).includes("Sablayan") ||
-                  String(datas.dryer_id.location).includes("Occidental Mindoro")
-                    ? datas.dryer_id.location
-                    : datas.dryer_id.location + ", Sablayan, Occidental Mindoro"}
+              <div className="flex flex-col text-sm">
+                {userRole === "farmer" && (
+                  <div
+                    className="ms-auto bg-[rgba(0,0,0,0.1)] hover:bg-[rgba(0,0,0,0.2)] p-3 rounded-full relative cursor-pointer"
+                    title="Gcash QR Code"
+                    onClick={() => setQrmodal((prev) => !prev)}
+                  >
+                    <RiQrCodeLine />
+                  </div>
+                )}
+
+                {qrModal && (
+                  <div className="mx-auto text-auto border p-1 bg-white max-w-1/2">
+                    <img
+                      src={
+                        datas.dryer_id.qr_code !== undefined &&
+                        datas.dryer_id.qr_code !== null
+                          ? datas.dryer_id.qr_code.startsWith("http") ||
+                            datas.dryer_id.qr_code.startsWith("blob:")
+                            ? datas.dryer_id.qr_code
+                            : `${import.meta.env.VITE_API.replace("/api", "")}${
+                                datas.dryer_id.qr_code
+                              }`
+                          : null
+                      }
+                      alt="Preview"
+                      className="max-h-[400px] w-auto object-contain"
+                    />
+                  </div>
+                )}
+
+                <p>
+                  {userRole === "farmer" ? "Patuyuan: " : "Dryer: "}
+                  <span className="capitalize font-bold">
+                    {datas.dryer_id.dryer_name}
+                  </span>
                 </p>
-                <div className="w-full text-start mt-5 overflow-auto">
+                <p>
+                  {userRole === "farmer" ? "Lokasyon: " : "Location: "}
+                  <span className="capitalize font-bold">
+                    {String(datas.dryer_id.location).includes("Sablayan") ||
+                    String(datas.dryer_id.location).includes(
+                      "Occidental Mindoro"
+                    )
+                      ? datas.dryer_id.location
+                      : datas.dryer_id.location +
+                        ", Sablayan, Occidental Mindoro"}
+                  </span>
+                </p>
+                <p>
+                  {userRole === "farmer" ? "Tasa: " : "Rate: "}
+                  <span className="capitalize font-bold">
+                    {datas.dryer_id.rate}
+                  </span>
+                </p>
+                <br />
+                <p>
+                  {userRole === "farmer" ? "Nireserba ni: " : "Reserved by: "}
+                  <span className="capitalize font-bold">
+                    {datas.farmer_id.first_name}
+                  </span>
+                </p>
+                <p>
+                  {userRole === "farmer" ? "Nireserba nang: " : "Reserved on: "}
+                  <span className="capitalize font-bold">
+                    {new Date(datas.created_at).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: true,
+                    })}
+                  </span>
+                </p>
+                <p>
+                  {userRole === "farmer" ? "Katayuan: " : "Status: "}
+                  <span className="capitalize font-bold">{datas.status}</span>
+                </p>
+                {datas.status === "denied" && (
                   <p>
-                    Status:{" "}
-                    <span className="capitalize font-bold">{datas.status}</span>
-                  </p>
-                  <p>
-                    Reserved by:{" "}
+                    {userRole === "farmer"
+                      ? "Rason sa pag tangi: "
+                      : "Reason for denial: "}
                     <span className="capitalize font-bold">
-                      {datas.farmer_id.first_name}
+                      {datas.notes ||
+                        datas.crop_type_id.notes ||
+                        "No notes provided."}
                     </span>
                   </p>
-                  <p>
-                    Reserved on:{" "}
-                    <span className="capitalize font-bold">
-                      {new Date(datas.created_at).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                        hour12: true,
-                      })}
+                )}
+                <br />
+                <p>
+                  {userRole === "farmer"
+                    ? "Paraan ng pag babayad: "
+                    : "Payment method: "}
+                  <span className="capitalize font-bold">
+                    {datas.crop_type_id.payment}
+                  </span>
+                </p>
+                <p>
+                  {userRole === "farmer" ? "Uri ng pananim: " : "Crop type: "}
+                  <span className="capitalize font-bold">
+                    {datas.crop_type_id.crop_type_name}
+                  </span>
+                </p>
+                <p>
+                  {userRole === "farmer" ? "Dami: " : "Quantity (Canvans): "}
+                  <span className="capitalize font-bold">
+                    {datas.crop_type_id.quantity}
+                  </span>
+                </p>
+
+                <p>
+                  {userRole === "farmer" ? "Kabuoan: " : "Total: "}
+                  <span className="capitalize font-bold">
+                    {safeNumber(datas.dryer_id.rate) *
+                      safeNumber(datas.crop_type_id.quantity)}
+                  </span>
+                </p>
+
+                <div className="my-4 flex flex-col">
+                  <div className="rounded-t-md bg-green-400 px-5 py-2 text-white">
+                    {userRole === "farmer"
+                      ? "Makipag-usap sa Dryer Owner"
+                      : "Chat with Farmer"}
+                  </div>
+                  <div className="px-1 py-5 border-x-4 border-green-400 flex flex-col gap-1">
+                    <div className="flex">
+                      <div className="bg-green-200 text-sm font-normal rounded px-5 py-2 max-w-3/4">
+                        <span className="italic">Sample</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <div className="bg-green-200 text-sm font-normal rounded px-5 py-2 max-w-3/4">
+                        <span className="italic">Sample</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-green-400 p-1 h-[46px] text-white flex gap-2">
+                    <textarea className="bg-[rgba(255,255,255,0.9)] flex-grow p-2 text-black resize-none"></textarea>
+                    {userRole === "farmer" &&
+                      datas.status !== "denied" &&
+                      datas.status !== "pending" && (
+                        <span
+                          onClick={() => {
+                            setGcashModal(true);
+                            setModal(false);
+                          }}
+                          className="rounded-full p-3 bg-green-600 flex items-center gap-2 hover:bg-green-700 cursor-pointer"
+                        >
+                          <span className="max-[768px]:hidden">
+                            {userRole === "farmer" ? "I-upload" : "Upload"}
+                          </span>
+                          <ImFolderUpload />
+                        </span>
+                      )}
+                    <span className="rounded-full p-3 bg-green-600 flex items-center gap-2 hover:bg-green-700 cursor-pointer">
+                      <span className="max-[768px]:hidden">
+                        {userRole === "farmer" ? "Ipadala" : "Send"}
+                      </span>
+                      <FaLocationArrow className="rotate-45" />
                     </span>
-                  </p>
-                  <table className="w-full my-2 min-w-[500px]">
+                  </div>
+                </div>
+
+                <div className="w-full overflow-x-auto">
+                  <table className="min-w-[700px] w-full">
                     <thead>
-                      <tr>
-                        <th className="border-t border-x">#</th>
-                        <th className="border-t border-x">Crop Type</th>
-                        <th className="border-t border-x">
-                          Quantity (Canvans)
-                        </th>
-                        <th className="border-t border-x">Rate</th>
-                        <th className="border-t border-x">Total</th>
+                      <tr className="bg-gray-200">
+                        <th className="text-left p-2">#</th>
+                        <th className="text-left p-2">Reference No.</th>
+                        <th className="text-left p-2">Amount</th>
+                        <th className="text-left p-2">Date</th>
+                        <th className="text-left p-2">Sender</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr>
-                        <td className="border-b border-x text-center">1</td>
-                        <td className="border-b border-x ps-5 capitalize">
-                          {datas.crop_type_id.crop_type_name}
-                        </td>
-                        <td className="border-b border-x pe-5 text-end">
-                          {datas.crop_type_id.quantity}
-                        </td>
-                        <td className="border-b border-x pe-5 text-end">
-                          {datas.dryer_id.rate}
-                        </td>
-                        <td className="border-b border-x pe-5 text-end">
-                          {safeNumber(datas?.dryer_id.rate) *
-                            safeNumber(datas?.crop_type_id.quantity)}
-                        </td>
-                      </tr>
+                      {transactions.length > 0 ? (
+                        transactions.map((item, index) => (
+                          <tr key={item.id}>
+                            <td className="border-b p-2">{index + 1}</td>
+                            <td className="border-b p-2">
+                              {item.reference_no}
+                            </td>
+                            <td className="border-b p-2">
+                              P {item.amount.toFixed(2)}
+                            </td>
+                            <td className="border-b p-2">{item.date}</td>
+                            <td className="border-b p-2">{item.sender}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td className="border-b p-2 text-center" colSpan={5}>
+                            No transactions found.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
-                    <tfoot className="w-full text-end">
-                      <tr>
-                        <td colSpan={5}>
-                          <p>
-                            Amount Due:{" "}
-                            <span>
-                              {safeNumber(datas?.dryer_id.rate) *
-                                safeNumber(datas?.crop_type_id.quantity)}
-                            </span>
-                          </p>
-                          <p className="capitalize">
-                            Payment Method: <span>{datas?.crop_type_id.payment}</span>
-                          </p>
-                        </td>
-                      </tr>
-                    </tfoot>
                   </table>
-                  {datas.status === "denied" && (
-                    <div className="mt-4 p-3 border border-red-400 bg-red-50 rounded-md">
-                      <p className="font-semibold text-red-700">Reason for Denial:</p>
-                      <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">
-                        {datas?.notes || datas?.crop_type_id?.notes || "No notes provided."}
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

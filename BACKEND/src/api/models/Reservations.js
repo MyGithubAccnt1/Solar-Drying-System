@@ -1,23 +1,27 @@
 import supabase from "../../database/supabase.db.js";
 import { v4 as uuidv4 } from "uuid";
-
+import { subMonths } from 'date-fns';  
 const Reservations = {
   findAll: async ({ farmer_id } = {}) => {
+    const oneMonthAgo = subMonths(new Date(), 1).toISOString();  
     let query = supabase
       .from("reservations")
       .select(
         `
       id,
       farmer_id:farmer_id (id, first_name, last_name, email, mobile_number),
-      dryer_id:dryer_id (id, dryer_name, location, rate, available_capacity, created_by_id),
-      crop_type_id:crop_type_id (crop_type_id, crop_type_name, quantity, payment),
+      owner_id:owner_id (id, first_name, last_name, email, mobile_number),
+      dryer_id:dryer_id (id, dryer_name, location, rate, available_capacity),
+      crop_type_id:crop_type_id (crop_type_id, crop_type_name, quantity, payment, notes),
       status,
       created_at
     `
       )
       .order("created_at", { ascending: false });
 
-    if (farmer_id) query = query.eq("farmer_id", farmer_id);
+    if (farmer_id) query = query.eq("farmer_id", farmer_id);  // Filter by farmer_id
+    query = query.gte("created_at", oneMonthAgo);  // Filter to get only reservations from the last month
+
     const { data, error } = await query;
     if (error) throw error;
 
@@ -37,7 +41,7 @@ const Reservations = {
           id, dryer_name, location, rate, available_capacity
         ),
         crop_type_id:crop_type_id ( 
-          crop_type_id, crop_type_name, quantity, payment
+          crop_type_id, crop_type_name, quantity, payment, notes
         ),
         status,
         created_at
@@ -50,7 +54,7 @@ const Reservations = {
     return data;
   },
 
-  create: async ({ farmer_id, dryer_id, crop_type_id }) => {
+  create: async ({ farmer_id, dryer_id, crop_type_id, owner_id }) => {
     const { data, error } = await supabase
       .from("reservations")
       .insert([
@@ -60,6 +64,7 @@ const Reservations = {
           dryer_id,
           crop_type_id,
           status: "pending",
+          owner_id,
         },
       ])
       .select()
