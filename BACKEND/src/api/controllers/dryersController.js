@@ -31,13 +31,13 @@ export const getOwned = async (req, res) => {
 };
 
 export const getDryers = async (req, res) => {
-  const { limit, offset } = req.query;
+  const { limit, offset, role } = req.query;
 
   try {
     let query = supabase
       .from("dryers")
       .select(
-        "id, dryer_name, location, available_capacity, maximum_capacity, rate, image_url, created_by_id, created_at",
+        "id, dryer_name, location, available_capacity, maximum_capacity, rate, image_url, created_by_id, created_at, is_operation, operation_reason",
         { count: "exact" }
       )
       .order("created_at", { ascending: false });
@@ -46,6 +46,12 @@ export const getDryers = async (req, res) => {
       const start = Number(offset);
       const end = start + Number(limit) - 1;
       query = query.range(start, end);
+    }
+
+    if (typeof role !== "undefined") {
+      if (role === "farmer") {
+        query = query.eq("is_operation", true) 
+      } 
     }
 
     const { data, count, error } = await query;
@@ -133,6 +139,8 @@ export const createDryer = async (req, res) => {
       image_url,
       created_by_id,
       qr_code,
+      is_operation = false,
+      operation_reason = null,
     } = req.body;
 
     const { data, error } = await supabase
@@ -147,6 +155,8 @@ export const createDryer = async (req, res) => {
           image_url,
           created_by_id,
           qr_code,
+          is_operation,
+          operation_reason,
         },
       ])
       .select()
@@ -167,8 +177,16 @@ export const createDryer = async (req, res) => {
 export const updateDryer = async (req, res) => {
   try {
     const { id } = req.params;
-    const { dryer_name, location, maximum_capacity, rate, image_url, qr_code } =
-      req.body;
+    const {
+      dryer_name,
+      location,
+      maximum_capacity,
+      rate,
+      image_url,
+      qr_code,
+      is_operation,
+      operation_reason = null, 
+    } = req.body;
 
     const { data: existingData, error: existingError } = await supabase
       .from("dryers")
@@ -196,6 +214,8 @@ export const updateDryer = async (req, res) => {
         available_capacity,
         image_url,
         qr_code,
+        is_operation,
+        operation_reason,
       })
       .eq("id", id)
       .select()
